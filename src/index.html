@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Similarity Model</title>
+</head>
+<body>
+    
+    <script>
+        window.onload = function(){
+            var form = document.querySelector("form")
+            var s1 = document.querySelector("#s1")
+            var s2 = document.querySelector("#s2")
+            var btn = document.querySelector("#sub")
+            var resp = document.querySelector("#resposta")
+            form.addEventListener("submit", function(e){
+                e.preventDefault()
+                btn.disabled = true;
+                const data = {
+                    s1:s1.value,
+                    s2:s2.value
+                }
+                
+                console.log(JSON.stringify(data))
+                resp.textContent = "aguarde..."
+                fetch("http://localhost:3000/",{
+                    method:"POST",
+                    body:JSON.stringify(data),
+                    headers:{
+                        "Content-Type":"application/json"
+                    }
+                })
+                .then(function(res){
+                    return res.json();
+                })
+                .then(function(res){
+                    var aux = ""
+                    if(!res.isEntailment){
+                        aux = "não"
+                    }
+                    resp.className = "";
+                    resp.textContent = 'As sentenças "'+data.s1+'" e "'+data.s2+'" '+aux+' são semanticamente similares'
+                    btn.disabled = false;
+                })
+            })
+        }
+    </script>
+    <h1>Modelo de classificação de sentenças semanticamentes similares</h1>
+    <form>
+        <input type="text" name="s1" id="s1" placeholder="Primeira Sentença">
+        <input type="text" name="s2" id="s2" placeholder="Segunda Sentença">
+        <input type="submit" id = "sub" value="Classificar">
+    </form>
+    <p id="resposta"></p>
+</body>
+</html>

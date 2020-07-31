@@ -1,0 +1,42 @@
+[
+    {
+        "Acuracy: ":0.7618464052287581,
+        "Average Precision: ":0.7015050132752849,
+        "F1 Score: ":0.7583920430998757,
+        "Precision: ":0.7695542472666106,
+        "Recall: ":0.7475490196078431,
+        "algoritmo":"Redes neurais"
+    },
+    {
+        "Acuracy: ":0.7291666666666666,
+        "Average Precision: ":0.6630243657372519,
+        "F1 Score: ":0.7401019208153665,
+        "Precision: ":0.7113790504898266,
+        "Recall: ":0.7712418300653595,
+        "algoritmo":"Naive Bayes"
+    },
+    {
+        "Acuracy: ":0.7691993464052288,
+        "Average Precision: ":0.705053354410337,
+        "F1 Score: ":0.7724526782118405,
+        "Precision: ":0.7617156473391581,
+        "Recall: ":0.7834967320261438,
+        "algoritmo":"Random Forest"
+    },
+    {
+        "Acuracy: ":0.6964869281045751,
+        "Average Precision: ":0.6377214141017031,
+        "F1 Score: ":0.6931020239570426,
+        "Precision: ":0.7009189640768588,
+        "Recall: ":0.6854575163398693,
+        "algoritmo":"Decision Tree"
+    },
+    {
+        "Acuracy: ":0.7671568627450981,
+        "Average Precision: ":0.7043728350335272,
+        "F1 Score: ":0.7681041497152156,
+        "Precision: ":0.7649918962722853,
+        "Recall: ":0.7712418300653595,
+        "algoritmo":"Support Vector Machine"
+    }
+]
