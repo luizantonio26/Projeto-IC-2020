@@ -4,7 +4,6 @@ import nltk
 import spacy
 import re
 import stanfordnlp
-import jellyfish as jf
 import xml.etree.ElementTree as et
 from xml.etree import cElementTree as ET
 import numpy as np
@@ -12,17 +11,21 @@ import warnings
 import math
 import gensim
 from gensim.models import KeyedVectors
-import pprint
 import Util
 from sklearn.feature_extraction.text import TfidfVectorizer
 import time
 from LoadModels import LoadModels
+from transformers import AutoModel, AutoTokenizer
+import bert
+import torch
+
 class ExtractFeatures:
     def __init__(self, stanfordModel, embeddings, spacy, corpus = ""):
         self.corpus = corpus
-        self.stanfordModel = stanfordModel
-        self.sp = spacy
-        self.embeddings = embeddings
+        if stanfordModel != "" and embeddings != "" and spacy != "":
+            self.stanfordModel = stanfordModel
+            self.sp = spacy
+            self.embeddings = embeddings
     
     warnings.filterwarnings("ignore")
 
@@ -89,7 +92,11 @@ class ExtractFeatures:
             for word in sent.words:
                 tks1.append(word.lemma)
                 if word.governor > 0:
-                    dic = {"index":word.index, "text":word.lemma, "governorIndex": word.governor,"governor":dep1.sentences[0].words[word.governor-1].lemma , "rel":word.dependency_relation}
+                    try:
+                        dic = {"index":word.index, "text":word.lemma, "governorIndex": word.governor,"governor":dep1.sentences[0].words[word.governor-1].lemma , "rel":word.dependency_relation}
+                    except:
+                        dic = {"index":word.index, "text":word.lemma, "governorIndex": word.governor,"governor":dep1.sentences[0].words[0].lemma , "rel":word.dependency_relation}
+                    
                 else:
                     dic = {"index":word.index, "text":word.lemma, "governorIndex": word.governor,"governor":'root' , "rel":word.dependency_relation}
                 ll.append(dic)
@@ -99,7 +106,10 @@ class ExtractFeatures:
             for word in sent.words:
                 tks2.append(word.lemma)
                 if word.governor > 0:
+                    try:
                         dic = {"index":word.index, "text":word.lemma, "governorIndex": word.governor,"governor":dep2.sentences[0].words[word.governor-1].lemma , "rel":word.dependency_relation}
+                    except:
+                        dic = {"index":word.index, "text":word.lemma, "governorIndex": word.governor,"governor":dep2.sentences[0].words[0].lemma , "rel":word.dependency_relation}
                 else:
                     dic = {"index":word.index, "text":word.lemma, "governorIndex": word.governor,"governor":'root' , "rel":word.dependency_relation}
                 ll.append(dic)
@@ -112,6 +122,7 @@ class ExtractFeatures:
         for token in doc:
             ldep.append({"text":token.text, "rel":token.dep_, "children":[child for child in token.children]})
         return ldep
+    
     def isSinonimos(self, palavra1, palavra2, sinonimos):
         palavra1.lower()
         palavra2.lower()
@@ -186,8 +197,7 @@ class ExtractFeatures:
                 return False
         
         return False
-    
-    
+            
     def isAntonimo(self, palavra1, palavra2):
         lantonimos = Util.readJson("./assets/antonimos.json")
         palavra1.lower()
@@ -225,6 +235,7 @@ class ExtractFeatures:
                             if (k == pal2['palavra'] and i['palavra'] == pal1['palavra']) or (k == pal1['palavra'] and i['palavra'] == pal2['palavra']):
                                 return True
         return False
+    
     def isAntonimosPapel(self, p1, p2):
         hipe = Util.readJson("./assets/antonimos.json")
         doc = self.stanfordModel(p1)
@@ -247,7 +258,7 @@ class ExtractFeatures:
                             return True
             elif p1t != p2t:
                 return False
-        
+      
     def removeStopWords(self, text):
         #Remove stopwords
         stopwords = nltk.corpus.stopwords.words('portuguese')
@@ -278,19 +289,6 @@ class ExtractFeatures:
         token2 = self.removeStopWords(token2)
         
         return {"vec1":token, "vec2":token2}
-
-    def calcularSimilaridade(self, sentenca1, sentenca2):
-        t = self.preProcess(sentenca1, sentenca2)
-        kd = self.sepOcorrencias(t['vec1'], t['vec2'])
-        vec1 = []
-        vec2 = []
-        for i in range(0, len(kd['vec1'])):
-            vec1.append(kd['vec1'][i]['freq'])
-            vec2.append(kd['vec2'][i]['freq'])
-        sim = self.simCosseno(vec1, vec2)
-            
-        return sim
-        
 
     def lcsr(self, s1, s2):
         maior = max(len(s1), len(s2))
@@ -436,24 +434,6 @@ class ExtractFeatures:
                 obj = i
 
         return {"root":root, "subj":nsubj, "obj":obj}
-    
-    def subjectEquals(self, vec, sinonimos):
-        vec1 = self.getSubj(vec[0])
-        vec2 = self.getSubj(vec[1])
-        if (vec1['root'] == vec2['root'] or self.isSinonimos(vec1['root'], vec2['root'], sinonimos)):
-            try:
-                if self.lcsr(vec1['subj'], vec2['subj']) > 0.5 or self.isSinonimos(vec1['subj'], vec2['subj'], sinonimos):
-                    return True
-            except:
-                # flag = 0
-                # if vec2['subj'] == vec1['obj']['text'] or self.isSinonimos(vec2['subj'], vec2['obj']['text'], sinonimos):
-                #     return True
-                # elif vec1['subj'] == vec1['obj']['text'] or self.isSinonimos(vec1['subj'], vec1['obj']['text'], sinonimos):
-                #     return True
-                pass  
-        return False
-        
-        
             
     def countNeg(self, frase):
         frase = frase.lower()
@@ -468,15 +448,20 @@ class ExtractFeatures:
                 if aux == j:
                     qtd += 1
         return qtd
+    
     def countAnt(self, s1, s2):
         vecs = self.preProcess(s1, s2)
         count = 0
         for i in vecs['vec1']:
             for k in vecs['vec2']:
-                    if self.isAntonimosPapel(i, k):
-                        count+=1
-                        vecs['vec2'].remove(k)
+                    try:
+                        if self.isAntonimosChave(i, k):
+                            count+=1
+                            vecs['vec2'].remove(k)
+                    except:
+                        pass
         return count
+    
     def subjEquals(self, dep1, dep2):
         subj = False
         root = []
@@ -574,7 +559,6 @@ class ExtractFeatures:
         
         return max(f1, f2) - min(f1, f2)
         
-
     def entityEquals(self, vec1, vec2, model):
         s1 = model(vec1['text'])
         s2 = model(vec2['text'])
@@ -609,13 +593,15 @@ class ExtractFeatures:
         
         tk1 = self.removeStopWords(tk1)
         tk2 = self.removeStopWords(tk2)
-        
         for i in tk1:
             for j in tk2:
-                if self.isSinonimosPapel(i, j, sinonimos) and i != j:
-                    count+=1
-                    tk2.remove(j)
-
+                try:
+                    #if self.isSinonimosPapel(i, j, sinonimos) and i != j:
+                    if self.isSinonimosChave(i, j) and i != j:
+                        count+=1
+                        tk2.remove(j)
+                except:
+                    pass
         return count
     
     def countTokensEquals(self, s1, s2, sinonimos):
@@ -657,10 +643,12 @@ class ExtractFeatures:
         
         for i in tk1:
             for k in tk2:
-                if i == k or self.isSinonimos(i, k, sinonimos):
-                    count += 1
-                    tk2.remove(k)
-        
+                try:
+                    if i == k or self.isSinonimos(i, k, sinonimos):
+                        count += 1
+                        tk2.remove(k)
+                except:
+                    pass
         return count
     
     def getListSubj(self):
@@ -811,6 +799,44 @@ class ExtractFeatures:
             i+=2
         
         return lhipe
+    
+    def bertTest(self, sentenca):
+        tokenizer = AutoTokenizer.from_pretrained('neuralmind/bert-base-portuguese-cased')
+        model = AutoModel.from_pretrained('neuralmind/bert-base-portuguese-cased')
+        
+        input_ids = tokenizer.encode(sentenca, return_tensors='pt')
+
+        with torch.no_grad():
+            outs = model(input_ids)
+            encoded = outs[0][0, 1:-1]  # Ignore [CLS] and [SEP] special tokens
+        
+        #sim = simCosseno(encoded[0], encoded[1])
+        
+        return encoded
+    
+    def simBert(self, s1, s2):
+        s1Emb = self.bertTest(s1)
+        s2Emb = self.bertTest(s2)
+        sim = self.simCosseno(s1Emb[0], s2Emb[0])
+        return sim.item()
+    
+    def listSimBert(self, index):
+        sentenca = self.readXml()
+        i = index
+        lhipe = []
+        temp = 0
+        while i < len(sentenca)-1 and temp < 10600:
+            print(sentenca[i]['id'])
+            start = time.time()
+            lhipe.append(
+                self.simBert(sentenca[i]['text'], sentenca[i+1]['text'])
+            )
+            i+=2
+            end = time.time()
+            temp += (end-start)
+        
+        return lhipe
+    
     def listCountSinonimos(self):
         sentenca = self.readXml()
         sinonimos = Util.readJson("./assets/sinonimos.json")
@@ -824,15 +850,25 @@ class ExtractFeatures:
             i+=2
         
         return lhipe
+    
     def joinFeatures(self):
         filename = self.corpus.split('/')
-        filename = filename[3].split('.xml')
+        filename = filename[4].split('.xml')
         arq = Util.readJson("./assets/test_features_"+filename[0]+"10.0.json")
         nlist = []
+        print(filename)
         #sub = self.getListSubj()
-        count = self.getListTokenEquals()
+        has = []
         i = 0
-        while i < len(arq): 
+        try:
+            has = Util.readJson("./test_features_"+filename[0]+"_bert.json")
+            i = len(has)
+        except:
+            i = 0
+            pass
+        count = self.listSimBert(i*2)
+        aux = 0
+        while i < len(arq) and aux < len(count): 
             print(i+1)
             nlist.append({
                 "id":arq[i]['id'],
@@ -846,7 +882,8 @@ class ExtractFeatures:
                 "parafraseamento":arq[i]['parafraseamento'],
                 "neg":arq[i]['neg'],
                 "root":arq[i]['root'],
-                "qtdTokensEquals":count[i],
+                "bert":count[aux],
+                "qtdTokensEquals":arq[i]['qtdTokensEquals'],
                 "qtdLemmasEquals":arq[i]['qtdLemmasEquals'],
                 "entity":arq[i]['entity'],
                 "antonimos":arq[i]['antonimos'],
@@ -855,18 +892,21 @@ class ExtractFeatures:
                 "similarity":arq[i]['similarity']
             })
             i+= 1
-        Util.writeJson(nlist, "test_features_"+filename[0]+"11.0")
-        #os.system('shutdown -s -t 10')
+            aux+=1
+        has+=nlist
+        Util.writeJson(has, "test_features_"+filename[0]+"_bert")
+        time.sleep(10)
+        os.system('shutdown -s -f')
         return nlist
-    
+        
     def getFeatures(self):
         sentenca = self.readXml()
         model = self.embeddings
         sinonimos = self.listaSinonimos()
         filename = self.corpus.split('/')
-        filename = "./assets/test_features-"+filename[3]+"3.0  "
+        filename = "./assets/test_features-"+filename[5]+"1.0"
         
-        sp = self.sp
+        sp = spacy.load('pt_core_news_sm')
         total = 0
         i = 0
         features = []
@@ -877,42 +917,55 @@ class ExtractFeatures:
         except :
             features = []
 
-        while i < len(sentenca) - 1 and total <= 15600 :
+        while i < len(sentenca) - 1 and total < 15000:
             print(sentenca[i]['id'])
             start = time.time()
-            sin = self.countSinonimos(sentenca[i]['text'], sentenca[i+1]['text'], sinonimos)
-            dep = self.anotacaoDependencia(sentenca[i], sentenca[i+1])
-            cos_wmd = self.cosWordEmbeddings(dep['sent'][0]['token'], dep['sent'][1]['token'], model)
-            #sim = self.calcularSimilaridade(sentenca[i], sentenca[i+1])
-            sim = self.calcTfIDF(sentenca[i], sentenca[i+1])
-            neg = self.verificarNegacao(sentenca[i], sentenca[i+1])
-            root = self.verboPrinciapalIgual(dep['sent'], sinonimos)
-            entity = self.entityEquals(sentenca[i], sentenca[i+1], sp)
-            #subj = self.subjectEquals(dep['sent'], sinonimos)
-            antonimos = self.countAnt(sentenca[i]['text'],sentenca[i+1]['text'])
-            subj = self.subjEquals(self.dependenceParsySpacy(sentenca[i]['text'], sp), self.dependenceParsySpacy(sentenca[i+1]['text'], sp))
-            features.append({
-                "id":sentenca[i]['id'],
-                "sentencas":[sentenca[i]['text'], sentenca[i+1]['text']],
-                "wmd":cos_wmd['wmd'],
-                "cos_embeddings":cos_wmd['cos'],
-                "sim":sim,
-                "subjEquals":subj,
-                "neg":neg,
-                "root":root,
-                "entity":entity,
-                "antonimos":antonimos,
-                "sinonimos":sin,
-                "entailment":sentenca[i]['entailment'],
-                "similarity":sentenca[i]['similarity']
-            })
+            try:
+                
+                sin = self.countSinonimos(sentenca[i]['text'], sentenca[i+1]['text'], sinonimos)
+                dep = self.anotacaoDependencia(sentenca[i], sentenca[i+1])
+                cos_wmd = self.cosWordEmbeddings(dep['sent'][0]['token'], dep['sent'][1]['token'], model)
+                sim = self.calcTfIDF(sentenca[i], sentenca[i+1])
+                neg = self.verificarNegacao(sentenca[i], sentenca[i+1])
+                root = self.verboPrinciapalIgual(dep['sent'], sinonimos)
+                entity = self.entityEquals(sentenca[i], sentenca[i+1], sp)
+                antonimos = self.countAnt(sentenca[i]['text'],sentenca[i+1]['text'])
+                subj = self.subjEquals(self.dependenceParsySpacy(sentenca[i]['text'], sp), self.dependenceParsySpacy(sentenca[i+1]['text'], sp))
+                obj = self.objEquals(self.dependenceParsySpacy(sentenca[i]['text'], sp), self.dependenceParsySpacy(sentenca[i+1]['text'], sp))
+                hiperonimo = self.countHiperonimo(sentenca[i]['text'], sentenca[i+1]['text'])
+                parafrase = self.regularExpression(sentenca[i], sentenca[i+1])
+                ltoken = self.countTokensEquals(sentenca[i]['text'], sentenca[i+1]['text'], sinonimos)
+                llemmas = self.countLemmasEquals(sentenca[i]['text'], sentenca[i+1]['text'], sinonimos)
+                features.append({
+                    "id":sentenca[i]['id'],
+                    "objEquals":obj,
+                    "hiperonimo":hiperonimo,
+                    "parafraseamento":parafrase,
+                    "qtdTokensEquals":ltoken,
+                    "qtdLemmasEquals":llemmas,
+                    "sentencas":[sentenca[i]['text'], sentenca[i+1]['text']],
+                    "wmd":cos_wmd['wmd'],
+                    "cos_embeddings":cos_wmd['cos'],
+                    "sim":sim,
+                    "subjEquals":subj,
+                    "neg":neg,
+                    "root":root,
+                    "entity":entity,
+                    "antonimos":antonimos,
+                    "sinonimos":sin,
+                    "entailment":sentenca[i]['entailment'],
+                    "similarity":sentenca[i]['similarity']
+                })
+            except:
+                pass
+            
             i += 2
             end = time.time()
             total += (end - start)
 
         Util.writeJson(features, filename)
-        # time.sleep(10)
-        # os.system('shutdown -a')
+        time.sleep(10)
+        #os.system('shutdown -s -f')
         
         return features
     
@@ -928,12 +981,10 @@ class ExtractFeatures:
         sin = self.countSinonimos(sentenca[i]['text'], sentenca[i+1]['text'], sinonimos)
         dep = self.anotacaoDependencia(sentenca[i], sentenca[i+1])
         cos_wmd = self.cosWordEmbeddings(dep['sent'][0]['token'], dep['sent'][1]['token'], model)
-        #sim = self.calcularSimilaridade(sentenca[i], sentenca[i+1])
         sim = self.calcTfIDF(sentenca[i], sentenca[i+1])
         neg = self.verificarNegacao(sentenca[i], sentenca[i+1])
         root = self.verboPrinciapalIgual(dep['sent'], sinonimos)
         entity = self.entityEquals(sentenca[i], sentenca[i+1], sp)
-        #subj = self.subjectEquals(dep['sent'], sinonimos)
         antonimos = self.countAnt(sentenca[i]['text'],sentenca[i+1]['text'])
         subj = self.subjEquals(self.dependenceParsySpacy(sentenca[i]['text'], sp), self.dependenceParsySpacy(sentenca[i+1]['text'], sp))
         obj = self.objEquals(self.dependenceParsySpacy(sentenca[i]['text'], sp), self.dependenceParsySpacy(sentenca[i+1]['text'], sp))
@@ -964,11 +1015,9 @@ class ExtractFeatures:
         return features
         
 
-# if __name__ == '__main__':
-#     filename = "./corpus/2019/assin2-test"
-#     models = LoadModels()
-#     teste = ExtractFeatures(models.loadModelStanfordNLP(), models.loadWorldEmbeddings(), models.loadWorldEmbeddings(), filename+".xml")
-#     print(teste.preProcess("O homem está rachando ovos em uma tigela",
-#             "A pessoa está quebrando ovos em uma tigela"))
-    # filename = filename.split('/')
-    # Util.writeJson(features, "test_features_"+filename[3]+"2.0")
+if __name__ == '__main__':
+    filename = "./assets/corpus/2019/assin2-train-only"
+    models = LoadModels()
+    #teste = ExtractFeatures(models.loadModelStanfordNLP(), models.loadWorldEmbeddings(), models.loadSpacy, filename+".xml")
+    teste = ExtractFeatures("", "", "", filename+".xml")
+    teste.joinFeatures()

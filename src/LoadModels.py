@@ -3,6 +3,7 @@ import spacy
 import gensim
 from gensim.models import KeyedVectors
 
+#Esta classe carrega os modelos treinados necessário para rodar o código, sendo eles spacy, stanfordnlp e word embeddings
 class LoadModels:
     def __init__(self):
         pass

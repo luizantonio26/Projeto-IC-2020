@@ -1,12 +1,12 @@
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import accuracy_score
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC, SVR
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.neural_network import MLPClassifier, MLPRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import cross_validate
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression, BayesianRidge, Lasso, LassoLars 
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import f1_score
@@ -17,6 +17,8 @@ from commons import read_xml, entailment_to_str, tokenize_sentence
 from ExtractFeatures import ExtractFeatures
 import os
 import Util
+import assinEvalAdapt
+
 class SimilarityModel:
     
     def __init__(self, ef, train="./assets/test_features_assin2-train-only10.0", test = "./assets/test_features_assin2-test10.0"):
@@ -69,7 +71,76 @@ class SimilarityModel:
         
         return model
     
-    def naiveBayesTrain(self, data):
+    def logisticRegression(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = LogisticRegression()
+        
+        model.fit(features, labels)
+        
+        return model
+
+    def bayesianRidge(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = BayesianRidge()
+        
+        model.fit(features, labels)
+        
+        return model
+    
+    def lasso(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = Lasso()
+        
+        model.fit(features, labels)
+        
+        return model
+    
+    def lassoLars(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = LassoLars()
+        
+        model.fit(features, labels)
+        
+        return model
+    
+    def randomForestRegressor(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = RandomForestRegressor()
+        
+        model.fit(features, labels)
+        
+        return model
+    
+    def decisionTreeRegressor(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = DecisionTreeRegressor()
+        
+        model.fit(features, labels)
+        
+        return model
+    
+    def redesNeuraisRegressor(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = MLPRegressor(random_state=1, max_iter=500)
+        
+        model.fit(features, labels)
+        
+        return model
+    def naiveBayesTrain(self, data, nfolds=10):
         features = data['features']
         labels = data['labels']
         label_names = data['label_names']
@@ -77,8 +148,8 @@ class SimilarityModel:
         
         #train, test, train_labels, test_labels = train_test_split(features, labels, test_size=0.33, random_state=42)
         # Inicializar classificador
-        gnb = GaussianNB()
-        scores = cross_validate(gnb, features, labels, cv=10, return_train_score=False, scoring=
+        clf = GaussianNB()
+        scores = cross_validate(clf, features, labels, cv=nfolds, return_train_score=False, scoring=
                                 ['accuracy',
                                 'average_precision',
                                 'f1',
@@ -86,40 +157,46 @@ class SimilarityModel:
                                 'recall',
                                 'roc_auc'])
         # Treinar classificador
-        gnb = gnb.fit(features, labels)
+        train = clf.fit(features, labels)
         # # fazer predições
         # preds = gnb.predict(test)
         
         print("\n\nNaive Bayes")
         
-        # print(preds)
-        # #avaliar precisão    
-        # print(accuracy_score(test_labels, preds))
-
+        results = []
         t = 0
         for i in scores['test_accuracy']:
             t += i
-        print("Accuracy: ", t/len(scores['test_accuracy']))
+        results.append({"Accuracy": t/len(scores['test_accuracy'])})
         t = 0
         for i in scores['test_precision']:
             t += i
-        print("Precision", t/len(scores['test_precision']))
-        t = 0
-        for i in scores['test_average_precision']:
-            t += i
-        print("Average Precision", t/len(scores['test_average_precision']))
+        results.append({"Precision": t/len(scores['test_precision'])})
         t = 0
         for i in scores['test_f1']:
             t += i
-        print("F1 score:", t/len(scores['test_f1']))
+        results.append({"F1_score": t/len(scores['test_f1'])})
         t = 0
         for i in scores['test_recall']:
             t += i
-        print("Recall:", t/len(scores['test_recall']))
+        results.append({"Recall": t/len(scores['test_recall'])})
         
-        return gnb
+        
+        result = {"recall":results[3]['Recall'], "accuracy":results[0]['Accuracy'], "precision":results[1]['Precision'], "f1_score":results[2]['F1_score']}
+        return {"model":train,"results":result, "totrain":clf}
+        #return gnb
 
-    def supportVM(self, data):
+    def supportVMR(self, data):
+        features = data['features']
+        labels = data['labels']
+        
+        model = SVR()
+        
+        model.fit(features, labels)
+        
+        return model
+
+    def supportVM(self, data, nfolds=10):
         features = data['features']
         labels = data['labels']
         label_names = data['label_names']
@@ -129,7 +206,7 @@ class SimilarityModel:
         # Inicializar classificador
         clf = SVC(gamma='auto')
         
-        scores = cross_validate(clf, features, labels, cv=10, return_train_score=False, scoring=
+        scores = cross_validate(clf, features, labels, cv=nfolds, return_train_score=False, scoring=
                                 ['accuracy',
                                 'average_precision',
                                 'f1',
@@ -137,42 +214,38 @@ class SimilarityModel:
                                 'recall',
                                 'roc_auc'])
         # Treinar classificador
-        clf = clf.fit(features, labels)
+        train = clf.fit(features, labels)
         
         # # fazer predições
         # preds = clf.predict(test)
         
         print("\n\nSupport Vector Machine")
         
-        # print(preds)
-        # #avaliar precisão    
-        # print(accuracy_score(test_labels, preds))
-        
+        results = []
         t = 0
         for i in scores['test_accuracy']:
             t += i
-        print("Accuracy: ", t/len(scores['test_accuracy']))
+        results.append({"Accuracy": t/len(scores['test_accuracy'])})
         t = 0
         for i in scores['test_precision']:
             t += i
-        print("Precision", t/len(scores['test_precision']))
-        t = 0
-        for i in scores['test_average_precision']:
-            t += i
-        print("Average Precision", t/len(scores['test_average_precision']))
+        results.append({"Precision": t/len(scores['test_precision'])})
         t = 0
         for i in scores['test_f1']:
             t += i
-        print("F1 score:", t/len(scores['test_f1']))
+        results.append({"F1_score": t/len(scores['test_f1'])})
         t = 0
         for i in scores['test_recall']:
             t += i
-        print("Recall:", t/len(scores['test_recall']))
+        results.append({"Recall": t/len(scores['test_recall'])})
         
         
-        return clf
+        result = {"recall":results[3]['Recall'], "accuracy":results[0]['Accuracy'], "precision":results[1]['Precision'], "f1_score":results[2]['F1_score']}
+        return {"model":train,"results":result, "totrain":clf}
         
-    def decisionTreeModel(self, data):
+        #return clf
+        
+    def decisionTreeModel(self, data, nfolds=10):
         features = data['features']
         labels = data['labels']
         label_names = data['label_names']
@@ -181,46 +254,42 @@ class SimilarityModel:
         #train, test, train_labels, test_labels = train_test_split(features, labels, test_size=0.33, random_state=42)
 
         clf = DecisionTreeClassifier()
-        scores = cross_validate(clf, features, labels, cv=10, return_train_score=False, scoring=
+        scores = cross_validate(clf, features, labels, cv=nfolds, return_train_score=False, scoring=
                                 ['accuracy',
                                 'average_precision',
                                 'f1',
                                 'precision',
                                 'recall',
                                 'roc_auc'])
-        clf = clf.fit(features, labels)
+        train = clf.fit(features, labels)
         # preds = clf.predict(test)
         
         print("\n\nArvore de decisão")
         
-        # print(preds)
-        
-        # print(accuracy_score(test_labels, preds))
-        
+        results = []
         t = 0
         for i in scores['test_accuracy']:
             t += i
-        print("Accuracy: ", t/len(scores['test_accuracy']))
+        results.append({"Accuracy": t/len(scores['test_accuracy'])})
         t = 0
         for i in scores['test_precision']:
             t += i
-        print("Precision", t/len(scores['test_precision']))
-        t = 0
-        for i in scores['test_average_precision']:
-            t += i
-        print("Average Precision", t/len(scores['test_average_precision']))
+        results.append({"Precision": t/len(scores['test_precision'])})
         t = 0
         for i in scores['test_f1']:
             t += i
-        print("F1 score:", t/len(scores['test_f1']))
+        results.append({"F1_score": t/len(scores['test_f1'])})
         t = 0
         for i in scores['test_recall']:
             t += i
-        print("Recall:", t/len(scores['test_recall']))
+        results.append({"Recall": t/len(scores['test_recall'])})
         
-        return clf
+        
+        result = {"recall":results[3]['Recall'], "accuracy":results[0]['Accuracy'], "precision":results[1]['Precision'], "f1_score":results[2]['F1_score']}
+        return {"model":train,"results":result, "totrain":clf}
+        #return clf
 
-    def randomForest(self, data):
+    def randomForest(self, data, nfolds=10):
         features = data['features']
         labels = data['labels']
         label_names = data['label_names']
@@ -228,7 +297,7 @@ class SimilarityModel:
         
         clf = RandomForestClassifier()
         print("\n\nRandom Forest")
-        scores = cross_validate(clf, features, labels, cv=10,  return_train_score=False, scoring=
+        scores = cross_validate(clf, features, labels, cv=nfolds,  return_train_score=False, scoring=
                                 ['accuracy',
                                 'average_precision',
                                 'f1',
@@ -236,83 +305,87 @@ class SimilarityModel:
                                 'recall',
                                 'roc_auc'])
         
-        clf = clf.fit(features, labels)
+        train = clf.fit(features, labels)
         
+        results = []
         t = 0
         for i in scores['test_accuracy']:
             t += i
-        print("Accuracy: ", t/len(scores['test_accuracy']))
+        results.append({"Accuracy": t/len(scores['test_accuracy'])})
         t = 0
         for i in scores['test_precision']:
             t += i
-        print("Precision", t/len(scores['test_precision']))
-        t = 0
-        for i in scores['test_average_precision']:
-            t += i
-        print("Average Precision", t/len(scores['test_average_precision']))
+        results.append({"Precision": t/len(scores['test_precision'])})
         t = 0
         for i in scores['test_f1']:
             t += i
-        print("F1 score:", t/len(scores['test_f1']))
+        results.append({"F1_score": t/len(scores['test_f1'])})
         t = 0
         for i in scores['test_recall']:
             t += i
-        print("Recall:", t/len(scores['test_recall']))
+        results.append({"Recall": t/len(scores['test_recall'])})
         
-        return clf
         
-    def redesNeurais(self, data):
+        result = {"recall":results[3]['Recall'], "accuracy":results[0]['Accuracy'], "precision":results[1]['Precision'], "f1_score":results[2]['F1_score']}
+        return {"model":train,"results":result, "totrain":clf}
+        #return clf
+        
+    def redesNeurais(self, data, nfolds=10):
         features = data['features']
         labels = data['labels']
         label_names = data['label_names']
         feature_names = data['feature_names']
         
         clf = MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(5, 2), random_state=1)
-        scores = cross_validate(clf, features, labels, cv=10, return_train_score=False, scoring=
+        scores = cross_validate(clf, features, labels, cv=nfolds, return_train_score=False, scoring=
                                 ['accuracy',
                                 'average_precision',
                                 'f1',
                                 'precision',
                                 'recall',
                                 'roc_auc'])
-        clf = clf.fit(features, labels)
+        train = clf.fit(features, labels)
         
         # preds = clf.predict(test)
         
         print("\n\nRedes Neurais")
-        
-        # print(preds)
-
-        # print(accuracy_score(test_labels, preds))
+        results = []
         t = 0
         for i in scores['test_accuracy']:
             t += i
-        print("Accuracy: ", t/len(scores['test_accuracy']))
+        results.append({"Accuracy": t/len(scores['test_accuracy'])})
         t = 0
         for i in scores['test_precision']:
             t += i
-        print("Precision", t/len(scores['test_precision']))
-        t = 0
-        for i in scores['test_average_precision']:
-            t += i
-        print("Average Precision", t/len(scores['test_average_precision']))
+        results.append({"Precision": t/len(scores['test_precision'])})
         t = 0
         for i in scores['test_f1']:
             t += i
-        print("F1 score:", t/len(scores['test_f1']))
+        results.append({"F1_score": t/len(scores['test_f1'])})
         t = 0
         for i in scores['test_recall']:
             t += i
-        print("Recall:", t/len(scores['test_recall']))
+        results.append({"Recall": t/len(scores['test_recall'])})
         
-        
-        return clf
+        result = {"recall":results[3]['Recall'], "accuracy":results[0]['Accuracy'], "precision":results[1]['Precision'], "f1_score":results[2]['F1_score']}
+        return {"model":train,"results":result, "totrain":clf}
+        #return clf
     
-    def predictSimilarity(self, features):
+    def predictSimilarity(self, features, algorithm):
         data = Util.readJson(self.train+".json")
+        data += Util.readJson(self.test+".json")
         data = self.datasetScikit(data, isRegression=True)
-        model = self.linearRegression(data)
         
+        if algorithm == "linearRegression":
+            model = self.linearRegression(data)
+        elif algorithm == "logisticRegression":
+            model = self.logisticRegression(data)
+        elif algorithm == "bayesianRidge":
+            model = self.bayesianRidge(data)
+        elif algorithm == "lasso":
+            model = self.lasso(data)
+        elif algorithm == "lassoLars":
+            model = self.lassoLars(data)
         pred = model.predict(features)
         
         return pred
@@ -371,40 +444,20 @@ class SimilarityModel:
             arff.write(string)
         arff.close()
     
-    def testModels(self, feature_names):
+    def testModels(self, feature_names, output):
         dataTrain = Util.readJson(self.train+".json")
-        train = self.datasetScikit(dataTrain, feature_names)
         dataTest = Util.readJson(self.test+".json")
         test = self.datasetScikit(dataTest, feature_names)
+        train = self.datasetScikit(dataTrain, feature_names)
         lresult = []
-        neuralNetwork = self.redesNeurais(train)
-        naiveBayes = self.naiveBayesTrain(train)
         randomForest = self.randomForest(train)
-        decisionTree = self.decisionTreeModel(train)
+        randomForest = randomForest['model']
         svm = self.supportVM(train)
+        svm = svm['model']
         
-        resultNN = neuralNetwork.predict(test['features'])
-        resultNB = naiveBayes.predict(test['features'])
         resultRF = randomForest.predict(test['features'])
-        resultDT = decisionTree.predict(test['features'])
         resultSVM = svm.predict(test['features'])
-        aux = []
-        print("\n\nRedes neurais: ")
-        aux.append({"algoritmo":"Redes neurais","Acuracy: ":accuracy_score(test['labels'], resultNN),
-        "Precision: ": precision_score(test['labels'], resultNN),
-        "F1 Score: ": f1_score(test['labels'], resultNN),
-        "Average Precision: ": average_precision_score(test['labels'], resultNN),
-        "Recall: ": recall_score(test['labels'], resultNN),
-        })
-
-        print("\n\nNaive Bayes: ")
-        aux.append({"algoritmo":"Naive Bayes", "Acuracy: ": accuracy_score(test['labels'], resultNB),
-        "Precision: ": precision_score(test['labels'], resultNB),
-        "F1 Score: ": f1_score(test['labels'], resultNB),
-        "Average Precision: ": average_precision_score(test['labels'], resultNB),
-        "Recall: ": recall_score(test['labels'], resultNB)
-        })
-                   
+        aux = []      
         print("\n\nRandom Forest: ")
         aux.append({"algoritmo":"Random Forest","Acuracy: ": accuracy_score(test['labels'], resultRF),
         "Precision: ": precision_score(test['labels'], resultRF),
@@ -413,14 +466,6 @@ class SimilarityModel:
         "Recall: ": recall_score(test['labels'], resultRF)
         })
 
-        print("\n\nDecision Tree: ")
-        aux.append({"algoritmo":"Decision Tree","Acuracy: ": accuracy_score(test['labels'], resultDT),
-        "Precision: ": precision_score(test['labels'], resultDT),
-        "F1 Score: ": f1_score(test['labels'], resultDT),
-        "Average Precision: ": average_precision_score(test['labels'], resultDT),
-        "Recall: ": recall_score(test['labels'], resultDT)
-        })
-        
         print("\n\nSupport Vector Machine: ")
         aux.append({"algoritmo":"Support Vector Machine","Acuracy: ": accuracy_score(test['labels'], resultSVM),
         "Precision: ": precision_score(test['labels'], resultSVM),
@@ -430,13 +475,12 @@ class SimilarityModel:
         })
     
         lresult = aux
-        Util.writeJson(lresult, "resutados1")
+        Util.writeJson(lresult, output)
         
     def gerarArqTest(self, entailment_predict, similarity_predict, output):
         base_path = os.path.dirname(os.path.realpath(__file__))
-        fileTest = base_path+"\\corpus\\2019\\assin2-test.xml"
+        fileTest = base_path+"\\assets\\corpus\\2016\\assin-ptbr-test.xml"
         test_pairs = read_xml(fileTest, need_labels=False)
-
         tree = ET.parse(fileTest)
         root = tree.getroot()
         for i in range(len(test_pairs)):
@@ -444,48 +488,163 @@ class SimilarityModel:
             entailment_str = entailment_to_str[entailment_predict[i]]
             pair.set('entailment', entailment_str)
             pair.set('similarity', str(similarity_predict[i]))
-
         tree.write(output+".xml", 'utf-8')
-    def testAlgorithms(self, output, feature_names):
-        train = Util.readJson("../"+self.train+".json")
-        test = Util.readJson("../"+self.test+".json")
+    
+    def testAlgorithms(self, feature_names, output):
+        #train = Util.readJson("./assets/assin-mix-features-train.json")
+        train = Util.readJson("./assets/test_features-assin-ptbr-train-ent.json")
+        #train += Util.readJson("./assets/test_features-assin-ptpt-train-ent.json")
+        #train += Util.readJson("./assets/test_features-assin-ptbr-test-ent.json")
+        test = Util.readJson("./assets/test_features-assin-ptbr-test-ent.json")
         trainRegression = self.datasetScikit(train, feature_names, isRegression=True)
         trainClassifier = self.datasetScikit(train, feature_names)
         test = self.datasetScikit(test, feature_names)
+        testpath = "./assets/corpus/2016/assin-ptbr-test.xml"
+        
+        
+        entailment = self.randomForest(trainClassifier)
+        entailment_predict = entailment['model'].predict(test['features'])
         
         similarity = self.linearRegression(trainRegression)        
         similarity_predict = similarity.predict(test['features'])
+        self.gerarArqTest(entailment_predict, similarity_predict, "assets/databases/assin/result_mix/linearRegression")
+        linearR = self.assinEval(testpath, "./assets/databases/assin/result_mix/linearRegression.xml")
         
-        entailment = self.randomForest(trainClassifier)
-        entailment_predict = entailment.predict(test['features'])
-        self.gerarArqTest(entailment_predict, similarity_predict, "randomForest")
+        similarity = self.logisticRegression(trainRegression)        
+        similarity_predict = similarity.predict(test['features'])
+        self.gerarArqTest(entailment_predict, similarity_predict, "assets/databases/assin/result_mix/logisticRegression")
+        logisticR = self.assinEval(testpath, "./assets/databases/assin/result_mix/logisticRegression.xml")
         
-        entailment = self.naiveBayesTrain(trainClassifier)
-        entailment_predict = entailment.predict(test['features'])
-        self.gerarArqTest(entailment_predict, similarity_predict, "naiveBayes")
+        similarity = self.bayesianRidge(trainRegression)       
+        similarity_predict = similarity.predict(test['features'])
+        self.gerarArqTest(entailment_predict, similarity_predict, "assets/databases/assin/result_mix/bayesianRidge")
+        bayesR = self.assinEval(testpath, "./assets/databases/assin/result_mix/bayesianRidge.xml")
         
-        entailment = self.redesNeurais(trainClassifier)
-        entailment_predict = entailment.predict(test['features'])
-        self.gerarArqTest(entailment_predict, similarity_predict, "redesNeurais")
         
-        entailment = self.supportVM(trainClassifier)
-        entailment_predict = entailment.predict(test['features'])
-        self.gerarArqTest(entailment_predict, similarity_predict, "svm")
+        similarity = self.decisionTreeRegressor(trainRegression)       
+        similarity_predict = similarity.predict(test['features'])
+        self.gerarArqTest(entailment_predict, similarity_predict, "assets/databases/assin/result_mix/decisionTree")
+        decisionR = self.assinEval(testpath, "./assets/databases/assin/result_mix/decisionTree.xml")
         
-        entailment = self.decisionTreeModel(trainClassifier)
-        entailment_predict = entailment.predict(test['features'])
-        self.gerarArqTest(entailment_predict, similarity_predict, "decisionTree")
+        similarity = self.randomForestRegressor(trainRegression)       
+        similarity_predict = similarity.predict(test['features'])
+        self.gerarArqTest(entailment_predict, similarity_predict, "assets/databases/assin/result_mix/randomForest")
+        randomR = self.assinEval(testpath, "./assets/databases/assin/result_mix/randomForest.xml")
+        
+        
+        
+        # similarity = self.redesNeuraisRegressor(trainRegression)       
+        # similarity_predict = similarity.predict(test['features'])
+        # self.gerarArqTest(entailment_predict, similarity_predict, "neuralNetwort")
+        
+        similarity = self.supportVMR(trainRegression)       
+        similarity_predict = similarity.predict(test['features'])
+        self.gerarArqTest(entailment_predict, similarity_predict, "assets/databases/assin/result_mix/svm")
+        svmR = self.assinEval(testpath, "./assets/databases/assin/result_mix/svm.xml")
+
+        results = {"randomForest":randomR, "svm":svmR}
+        result = {"results":results, "features":feature_names}
+        
+        Util.writeJson(result, output)
+        
     
-    def crossvalTest(self, fnames):
-        cp = Util.readJson("../"+self.train+".json")
+    def crossvalTest(self, fnames, nfolds):
+        cp = Util.readJson("./assets/"+self.train+".json")
+        cp += Util.readJson("./assets/"+self.test+".json")
+        data = self.datasetScikit(cp, fnames)
+
+        try:
+            result = Util.readJson("./assets/results_crossval.json")
+        except:
+            result = []
+            
+        rf = self.randomForest(data, nfolds)
+        nb = self.naiveBayesTrain(data, nfolds)
+        rn = self.redesNeurais(data, nfolds)
+        dt = self.decisionTreeModel(data, nfolds)
+        svm = self.supportVM(data, nfolds)
+        result.append({"folds":nfolds,"features":fnames, "result":{"random-forest":rf['results'], "naive-bayes":nb['results'], "redes-neurais":rn['results'], "decision-tree":dt['results'], "svm":svm['results']}})
+        
+        Util.writeJson(result, "./assets/results_crossval")
+        
+    def percentSplitTest(self, fnames, percent):
+        cp = Util.readJson(self.train+".json")
         cp += Util.readJson(self.test+".json")
         data = self.datasetScikit(cp, fnames)
         
-        self.randomForest(data)
-        self.naiveBayesTrain(data)
-        self.redesNeurais(data)
-        self.decisionTreeModel(data)
-        self.supportVM(data)
+        train_x, test_x, train_y, test_y = train_test_split(data['features'], data['labels'], test_size=percent, random_state=42)
+        
+        rf = self.randomForest(data)
+        nb = self.naiveBayesTrain(data)
+        rn = self.redesNeurais(data)
+        dt = self.decisionTreeModel(data)
+        svm = self.supportVM(data)
+        
+        
+        print(len(train_x), len(train_y), len(test_x), len(test_y))
+        rft = rf['totrain'].fit(train_x, train_y)
+        nbt = nb['totrain'].fit(train_x, train_y)
+        rnt = rn['totrain'].fit(train_x, train_y)
+        dtt = dt['totrain'].fit(train_x, train_y)
+        svmt = svm['totrain'].fit(train_x, train_y)
+        
+        
+        rfp = rft.predict(test_x)
+        nbp = nbt.predict(test_x)
+        rnp = rnt.predict(test_x)
+        dtp = dtt.predict(test_x)
+        svmp = svmt.predict(test_x)
+        
+        testes = {
+            "random-forest":{
+                "precision":precision_score(test_y, rfp),
+                "accuracy":accuracy_score(test_y, rfp),
+                "recall":recall_score(test_y, rfp),
+                "f1-score":f1_score(test_y, rfp)
+            },
+            "naive-bayes":{
+                "precision":precision_score(test_y, nbp),
+                "accuracy":accuracy_score(test_y, nbp),
+                "recall":recall_score(test_y, nbp),
+                "f1-score":f1_score(test_y, nbp)
+            },
+            "redes-neurais":{
+                "precision":precision_score(test_y, rnp),
+                "accuracy":accuracy_score(test_y, rnp),
+                "recall":recall_score(test_y, rnp),
+                "f1-score":f1_score(test_y, rnp)
+            },
+            "decision-tree":{
+                "precision":precision_score(test_y, dtp),
+                "accuracy":accuracy_score(test_y, dtp),
+                "recall":recall_score(test_y, dtp),
+                "f1-score":f1_score(test_y, dtp)
+            },
+            "suport-vector-machine":{
+                "precision":precision_score(test_y, svmp),
+                "accuracy":accuracy_score(test_y, svmp),
+                "recall":recall_score(test_y, svmp),
+                "f1-score":f1_score(test_y, svmp)
+            },
+        }
+        
+        try:
+            ld = Util.readJson("./assets/results_percent.json")
+        except:
+            ld = []
+            
+        ld.append({"features":fnames, "percent":percent, "results":testes})
+        
+        Util.writeJson(ld, "./assets/results_percent")
+            
+        
+        # rft.predict(train_y)
+        
+    def dataTraining(self):
+        data = Util.readJson(self.train+".json")
+        data += Util.readJson(self.test+".json")
+        
+        Util.writeJson(data,"training_model")
     
     def randomForestPredict(self, s1, s2):
         data = Util.readJson(self.train+".json")
@@ -495,21 +654,250 @@ class SimilarityModel:
         #filename = "./corpus/2019/assin2-train-only"
         features = self.datasetScikit(self.ef.getFeaturesIndividual(s1, s2))
         
-        if rand.predict(features['features']):
+        if rand['model'].predict(features['features']):
             return True
         
         return False
         
+    def assinEval(self, test, entrada):
+        test = read_xml(test, True)
+        entrada = read_xml(entrada, True)
+        rte = assinEvalAdapt.eval_rte(test, entrada)
+        similarity = assinEvalAdapt.eval_similarity(test, entrada)
         
+        return {"rte":rte, "similarity":similarity}
     
         
-# if __name__ == "__main__":
-#     #train = SimilarityModel("test_features_assin2-train-only10.0", "test_features_assin2-test10.0")
+if __name__ == "__main__":
+    ef = ""
     
-#     #train.randomForestTest()
+    train = SimilarityModel(ef, "./assets/test_features-assin-ptbr-train-ent", "./assets/test_features-assin-ptbr-test-ent")
+    feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals', 'parafraseamento', 'hiperonimo', 'entity'] 
+    train.testModels(feature_names, "./results/assin1/all features")
+    feature_names = ['sim'] 
+    train.testModels(feature_names, "./results/assin1/tf-idf")
+    feature_names = ['cos_embeddings']
+    train.testModels(feature_names, "./results/assin1/cos embeddings")
+    feature_names = ['wmd']
+    train.testModels(feature_names, "./results/assin1/wmd")
+    feature_names = ['cos_embeddings', 'sim', 'wmd']
+    train.testModels(feature_names, "./results/assin1/wmd-sim-coss_embeddings")
+    #train.dataTraining()
+# #     #train = SimilarityModel("test_features_assin2-train-only10.0", "test_features_assin2-test10.0")
+
+# #     #train.randomForestTest()
 #     ef = ""
-#     feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals','parafraseamento','hiperonimo']
-#     train = SimilarityModel(ef, "test_features_assin2-train-only10.0", "../test_features_assin2-test10.0")
+#     #feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals','parafraseamento']
+#     train = SimilarityModel(ef, "test_features_assin2-train-only10.0", "test_features_assin2-test10.0")
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals','hiperonimo', 'parafraseamento', 'entity']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals','hiperonimo', 'parafraseamento']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals','hiperonimo']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','parafraseamento']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','parafraseamento','qtdTokensEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','parafraseamento','qtdLemmasEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','parafraseamento','qtdLemmasEquals','qtdTokensEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+#     # feature_names = ['root','neg','cos_embeddings','wmd','sim','parafraseamento','qtdLemmasEquals','qtdTokensEquals', 'subjEquals']
+#     # train.crossvalTest(feature_names, 5)
+#     # train.crossvalTest(feature_names, 10)
+#     # train.crossvalTest(feature_names, 15)
+#     # train.crossvalTest(feature_names, 20)
+#     # train.percentSplitTest(feature_names, 0.1)
+#     # train.percentSplitTest(feature_names, 0.2)
+#     # train.percentSplitTest(feature_names, 0.3)
+#     # train.percentSplitTest(feature_names, 0.4)
+#     # train.percentSplitTest(feature_names, 0.5)
+    
+    
+    
+#     feature_names = ['cos_embeddings','wmd']
+#     train.crossvalTest(feature_names, 5)
+#     train.crossvalTest(feature_names, 10)
+#     train.crossvalTest(feature_names, 15)
+#     train.crossvalTest(feature_names, 20)
+#     train.percentSplitTest(feature_names, 0.1)
+#     train.percentSplitTest(feature_names, 0.2)
+    
+#     feature_names = ['wmd']
+#     train.crossvalTest(feature_names, 5)
+#     train.crossvalTest(feature_names, 10)
+#     train.crossvalTest(feature_names, 15)
+#     train.crossvalTest(feature_names, 20)
+#     train.percentSplitTest(feature_names, 0.1)
+#     train.percentSplitTest(feature_names, 0.2)
+    
+#     feature_names = ['cos_embeddings']
+#     train.crossvalTest(feature_names, 5)
+#     train.crossvalTest(feature_names, 10)
+#     train.crossvalTest(feature_names, 15)
+#     train.crossvalTest(feature_names, 20)
+#     train.percentSplitTest(feature_names, 0.1)
+#     train.percentSplitTest(feature_names, 0.2)
+    
+#     feature_names = ['sim']
+#     train.crossvalTest(feature_names, 5)
+#     train.crossvalTest(feature_names, 10)
+#     train.crossvalTest(feature_names, 15)
+#     train.crossvalTest(feature_names, 20)
+#     train.percentSplitTest(feature_names, 0.1)
+#     train.percentSplitTest(feature_names, 0.2)
+    #feature_names = ['root','neg','cos_embeddings','wmd','sim','sinonimos','subjEquals','antonimos','objEquals','qtdTokensEquals','qtdLemmasEquals']
+    #feature_names = ['root','neg','cos_embeddings','wmd','sim','qtdTokensEquals','qtdLemmasEquals', 'parafraseamento']
+    # train.crossvalTest(feature_names, 5)
+    # train.crossvalTest(feature_names, 10)
+    # train.crossvalTest(feature_names, 15)
+    # train.crossvalTest(feature_names, 20)
 #     print("-----------------------")
 #     train.crossvalTest(feature_names)
     #train.gerarArff("test_222")

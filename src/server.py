@@ -3,6 +3,7 @@ from flask_cors import CORS
 import ExtractFeatures
 import LoadModels
 import SimilarityModel
+import Util
 
 app = Flask(__name__)
 CORS(app)
@@ -15,13 +16,22 @@ sm = SimilarityModel.SimilarityModel(ef)
 @app.route('/', methods=['POST'])
 def isSimilarity():
     sentences = request.get_json()
-    s1 = request.args.get('s1')
-    s2 = request.args.get('s2')
-    print(sentences, s1, s2)
     features = ef.getFeaturesIndividual(sentences['s1'], sentences['s2'])
     result = sm.randomForestPredict(sentences['s1'], sentences['s2'])
     return jsonify({"isEntailment":result, "features":features})
     #data = request.get_json()
 
+
+@app.route('/add_example', methods=['POST'])
+def addExample():
+    dt = request.get_json()
+    train = Util.readJson('training_model.json')
+    if dt['isSimilarity']:
+        dt['features']['entailments'] = True
+    else:
+        dt['features']['entailments'] = False
+    train.append(dt)
+        
+    
 
 app.run(port=3000)
